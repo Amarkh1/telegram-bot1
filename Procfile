@@ -1,1 +1,1 @@
-web: python ttp7.py
+web: bash start.sh
