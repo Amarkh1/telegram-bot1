@@ -17,6 +17,8 @@ import json
 from datetime import datetime
 import logging
 import random
+import traceback
+from telegram import __version__ as TG_VER
 
 # Set up logging
 logging.basicConfig(
@@ -321,8 +323,25 @@ def get_navigation_keyboard(current_exercise):
     buttons.append(InlineKeyboardButton("Restart", callback_data="nav_1"))
     return InlineKeyboardMarkup([buttons])
 
+# Debug command handler
+async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Debug command received from {update.effective_user.id}")
+    await update.message.reply_text(f"Debug: Bot is running! Telegram version: {TG_VER}")
+
+# Error handler
+async def error_handler(update, context):
+    logger.error(f"Exception while handling an update: {context.error}")
+    logger.error(traceback.format_exc())
+    
+    # Notify user if possible
+    if update and update.effective_message:
+        await update.effective_message.reply_text(
+            "Sorry, something went wrong. The error has been logged."
+        )
+
 # Start the worksheet
 async def start_worksheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    logger.info(f"Start command received from {update.effective_user.id}")
     context.user_data['current_exercise'] = 1
     welcome_msg = (
         "🎓 Welcome to the Past Simple Worksheet Bot! 🎓\n\n"
@@ -594,15 +613,6 @@ async def start_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE, exe
             f"📝 {exercise_data['instruction']}\n\n"
             "✍️ Write your first sentence:"
         )
-    
-    # Always show navigation keyboard
-    nav_keyboard = get_navigation_keyboard(exercise_number)
-    if hasattr(update, 'callback_query') and update.callback_query:
-        await update.callback_query.edit_message_text(content, reply_markup=nav_keyboard)
-    else:
-        await update.message.reply_text(content, reply_markup=nav_keyboard)
-    
-    return globals()[f"EXERCISE{exercise_number}"]
 
 # Navigation handler
 async def navigate_exercises(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -622,9 +632,9 @@ async def navigate_exercises(update: Update, context: ContextTypes.DEFAULT_TYPE)
         exercise_number = context.user_data.get('current_exercise', 1)
         return await start_exercise(update, context, exercise_number)
 
-# Update the conversation handler to include voice support
+# Update the conversation handler
 conv_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start_worksheet)],
+    entry_points=[CommandHandler("start", start_worksheet)],
     states={
         EXERCISE1: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
@@ -677,25 +687,48 @@ conv_handler = ConversationHandler(
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
     },
-    fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-    per_message=True  # Changed to True to fix the PTBUserWarning
+    fallbacks=[
+        CommandHandler("cancel", lambda update, context: ConversationHandler.END),
+        CommandHandler("start", start_worksheet)  # Allow restarting even in conversation
+    ],
+    per_message=True,
+    name="exercise_conversation"  # Add a name for better logging
 )
 
 def main():
     # Get port from environment or default to 8000
     PORT = int(os.environ.get('PORT', 8000))
     
+    # Get Railway-provided public URL
+    RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+    if not RAILWAY_PUBLIC_DOMAIN:
+        logger.warning("RAILWAY_PUBLIC_DOMAIN not found, using default domain")
+        RAILWAY_PUBLIC_DOMAIN = "your-app.up.railway.app"
+    
+    # Build webhook URL
+    WEBHOOK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}"
+    
+    # Initialize application with token
     application = Application.builder().token(TOKEN).build()
+    
+    # Add handlers
     application.add_handler(conv_handler)
+    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message), group=1)
+    application.add_handler(CommandHandler("debug", debug_command), group=-1)
+    application.add_error_handler(error_handler)
     
-    # Add a separate voice handler for cases outside conversation
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
+    # Log important info
+    logger.info("Starting bot in webhook mode")
+    logger.info(f"Webhook URL: {WEBHOOK_URL}")
+    logger.info(f"Port: {PORT}")
     
-    logger.info("🚀 Past Simple Worksheet Bot started successfully!")
-    logger.info(f"🎯 Bot will run on port {PORT}")
-    
-    # IMPORTANT FIX: Use run_polling() instead of run_webhook()
-    application.run_polling()
+    # Start the bot with webhook
+    application.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL,
+        secret_token=None  # You can generate a random token for added security
+    )
 
 if __name__ == "__main__":
     main()
