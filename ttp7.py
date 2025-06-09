@@ -11,7 +11,6 @@ from telegram.ext import (
 import speech_recognition as sr
 import os
 import subprocess
-import pyttsx3
 import re
 from fuzzywuzzy import fuzz
 import json
@@ -26,29 +25,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize the text-to-speech engine
+# Initialize the text-to-speech engine with error handling
+engine = None
 try:
+    import pyttsx3
     engine = pyttsx3.init()
+    logger.info("TTS engine initialized successfully")
 except Exception as e:
     logger.warning(f"TTS initialization failed: {e}. TTS features will be disabled.")
-    engine = None
 
 # Set the correct FFmpeg path for Railway
-FFMPEG_PATH = "ffmpeg"  # Railway should have ffmpeg available
+FFMPEG_PATH = "ffmpeg"
 
 # Function to convert .ogg to .wav
 def convert_ogg_to_wav(input_file, output_file):
     input_file = os.path.abspath(input_file)
     output_file = os.path.abspath(output_file)
-    command = f'"{FFMPEG_PATH}" -y -i "{input_file}" "{output_file}"'
+    command = [FFMPEG_PATH, '-y', '-i', input_file, output_file]
     try:
-        subprocess.run(command, shell=True, check=True)
+        subprocess.run(command, check=True, capture_output=True)
         return True
     except subprocess.CalledProcessError as e:
         logger.error(f"FFmpeg error: {e}")
         return False
     except FileNotFoundError:
-        logger.error(f"FFmpeg executable not found at: {FFMPEG_PATH}")
+        logger.error(f"FFmpeg executable not found")
         return False
 
 # Function to convert text to speech
@@ -84,7 +85,7 @@ def is_response_correct(user_response: str, expected_answers: list) -> bool:
                 return True
         
         similarity_ratio = fuzz.ratio(user_response, expected_answer)
-        if similarity_ratio >= 75:  # Lower threshold for more flexibility
+        if similarity_ratio >= 75:
             return True
         
         # Check if expected answer words are contained in user response
@@ -130,7 +131,11 @@ TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN environment variable not set!")
+    logger.error("Please set your Telegram bot token in Railway's environment variables")
+    logger.error("Go to your Railway project > Variables > Add TELEGRAM_TOKEN")
     exit(1)
+else:
+    logger.info("TELEGRAM_TOKEN found successfully")
 
 # Define conversation states for each exercise
 EXERCISE1, EXERCISE2, EXERCISE3, EXERCISE4, EXERCISE5, EXERCISE6, EXERCISE7, EXERCISE8, EXERCISE9, EXERCISE10 = range(10)
@@ -169,6 +174,7 @@ PAST_SIMPLE_WORKSHEET = {
             "Person E": "5.We listened to music and we danced.",
         },
         "current_pair": 0,
+        "audio_link": "https://youtu.be/9EWCyn1Pw5w",
         "answers": {
             "A": ["4"],
             "B": ["5"],
@@ -318,6 +324,13 @@ def get_navigation_keyboard(current_exercise):
 # Start the worksheet
 async def start_worksheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['current_exercise'] = 1
+    welcome_msg = (
+        "🎓 Welcome to the Past Simple Worksheet Bot! 🎓\n\n"
+        "This interactive bot will help you practice past simple tense through 10 exercises.\n"
+        "You can type your answers or send voice messages! 🎤\n\n"
+        "Let's start with Exercise 1..."
+    )
+    await update.message.reply_text(welcome_msg)
     return await start_exercise(update, context, 1)
 
 # Enhanced voice message handler
@@ -336,22 +349,25 @@ async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYP
         text = await voice_to_text(file_path)
         
         if text:
-            await update.message.reply_text(f"Recognized text: {text}")
+            await update.message.reply_text(f"🎙️ Recognized: {text}")
             # Now handle the recognized text as a regular message
             update.message.text = text
             return await handle_exercise(update, context)
         else:
-            await update.message.reply_text("Sorry, I could not understand the audio. Please try again or type your answer.")
+            await update.message.reply_text("❌ Sorry, I could not understand the audio. Please try again or type your answer.")
     
     except Exception as e:
         logger.error(f"Voice processing error: {e}")
-        await update.message.reply_text("Sorry, there was an error processing your voice message. Please type your answer.")
+        await update.message.reply_text("❌ Sorry, there was an error processing your voice message. Please type your answer.")
     
     finally:
         # Clean up files
         for file_path in ["user_voice.ogg", "user_voice.wav"]:
             if os.path.exists(file_path):
-                os.remove(file_path)
+                try:
+                    os.remove(file_path)
+                except:
+                    pass
     
     # Return current state to stay in the same exercise
     return context.user_data.get('current_exercise', EXERCISE1)
@@ -372,7 +388,7 @@ async def handle_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Check if user wants to skip (for pronunciation exercises)
         if user_input == 'skip' and exercise_number in [4]:
             context.user_data[f'exercise{exercise_number}']['current_item'] += 1
-            await update.message.reply_text("Skipped to next item.")
+            await update.message.reply_text("⏭️ Skipped to next item.")
             return await start_exercise(update, context, exercise_number)
         
         # Process answer based on exercise type
@@ -397,11 +413,12 @@ async def handle_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 total_items = len(exercise_data['questions'])
                 
                 if context.user_data[f'exercise{exercise_number}']['current_item'] < total_items:
-                    feedback += f"\n\nQuestion {context.user_data[f'exercise{exercise_number}']['current_item'] + 1}: {exercise_data['questions'][context.user_data[f'exercise{exercise_number}']['current_item']]}"
+                    next_q = context.user_data[f'exercise{exercise_number}']['current_item']
+                    feedback += f"\n\nQuestion {next_q + 1}: {exercise_data['questions'][next_q]}"
                     await update.message.reply_text(feedback)
                     return exercise_number
                 else:
-                    feedback += f"\n\n🎉 You completed this exercise with {context.user_data[f'exercise{exercise_number}']['score']}/{total_items} correct answers!"
+                    feedback += f"\n\n🎉 Exercise completed! Score: {context.user_data[f'exercise{exercise_number}']['score']}/{total_items}"
                     keyboard = get_navigation_keyboard(exercise_number)
                     await update.message.reply_text(feedback, reply_markup=keyboard)
                     return exercise_number
@@ -409,7 +426,7 @@ async def handle_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 feedback = random.choice([
                     "❌ Almost there! Try again.",
                     "❌ Not quite right. Let's try once more.",
-                    f"❌ Good effort! The correct answer is: {expected_answers[0]}",
+                    f"❌ Good effort! A correct answer would be: {expected_answers[0]}",
                     "❌ You're close! Think about it again."
                 ])
                 await update.message.reply_text(feedback)
@@ -467,109 +484,115 @@ async def start_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE, exe
     if exercise_number == 1:
         current_q = context.user_data['exercise1']['current_item']
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"Examples:\n{exercise_data['examples'][0]}\n{exercise_data['examples'][1]}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            f"Question {current_q + 1}: {exercise_data['questions'][current_q]}"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📖 Examples:\n• {exercise_data['examples'][0]}\n• {exercise_data['examples'][1]}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            f"❓ Question {current_q + 1}: {exercise_data['questions'][current_q]}"
         )
     elif exercise_number == 2:
         pairs = "\n".join([f"{person}: {sentence}" for person, sentence in exercise_data['pairs'].items()])
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            f"People:\n{pairs}\n\n"
-            "Type your matches like: 'A-4, B-5, C-3, D-1, E-2'"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            f"👥 People and their activities:\n{pairs}\n\n"
+            "💬 Type your matches like: 'A-4, B-5, C-3, D-1, E-2'"
         )
     elif exercise_number == 3:
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            "Look back at Exercise 2 and find all the verbs (action words).\n"
-            "What do you notice about all these verbs?"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            "🔍 Look back at Exercise 2 and find all the verbs (action words).\n"
+            "💭 What do you notice about all these verbs?"
         )
     elif exercise_number == 4:
         current_sentence = context.user_data['exercise4']['current_sentence']
         sentence = exercise_data['sentences'][current_sentence]
         
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"{exercise_data['instruction']}\n\n"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
             f"🎯 Sentence {current_sentence + 1}: {sentence}\n\n"
-            "📱 Send a voice message to practice pronunciation!\n"
+            "🎤 Send a voice message to practice pronunciation!\n"
             "💬 Or type the sentence if you prefer\n"
             "⏭️ Type 'skip' to move to the next sentence"
         )
         
-        # Try to generate and send audio
-        try:
-            audio_file = f"tts_sentence_{current_sentence}.wav"
-            if text_to_speech(sentence, audio_file):
-                nav_keyboard = get_navigation_keyboard(exercise_number)
-                
-                if hasattr(update, 'callback_query') and update.callback_query:
-                    with open(audio_file, 'rb') as audio:
-                        await update.callback_query.message.reply_audio(audio=audio)
-                    await update.callback_query.message.reply_text(content, reply_markup=nav_keyboard)
-                else:
-                    with open(audio_file, 'rb') as audio:
-                        await update.message.reply_audio(audio=audio)
-                    await update.message.reply_text(content, reply_markup=nav_keyboard)
-                os.remove(audio_file)  # Clean up
-                return globals()[f"EXERCISE{exercise_number}"]
-        except Exception as e:
-            logger.error(f"TTS Error: {e}")
+        # Generate TTS if available (without failing if it doesn't work)
+        if engine:
+            try:
+                audio_file = f"tts_sentence_{current_sentence}.wav"
+                if text_to_speech(sentence, audio_file):
+                    nav_keyboard = get_navigation_keyboard(exercise_number)
+                    
+                    if hasattr(update, 'callback_query') and update.callback_query:
+                        with open(audio_file, 'rb') as audio:
+                            await update.callback_query.message.reply_audio(audio=audio)
+                        await update.callback_query.message.reply_text(content, reply_markup=nav_keyboard)
+                    else:
+                        with open(audio_file, 'rb') as audio:
+                            await update.message.reply_audio(audio=audio)
+                        await update.message.reply_text(content, reply_markup=nav_keyboard)
+                    
+                    # Clean up
+                    try:
+                        os.remove(audio_file)
+                    except:
+                        pass
+                    return globals()[f"EXERCISE{exercise_number}"]
+            except Exception as e:
+                logger.warning(f"TTS failed, continuing without audio: {e}")
     
     elif exercise_number == 5:
         rules_text = "\n".join([f"{letter}. {rule}" for letter, rule in exercise_data['rules'].items()])
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            f"{rules_text}\n\n"
-            "Give examples for each rule using verbs from Exercise 2."
+            f"📚 {exercise_data['title']}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            f"📋 Rules:\n{rules_text}\n\n"
+            "💡 Give examples for each rule using verbs from Exercise 2."
         )
     elif exercise_number == 6:
         current_q = context.user_data['exercise6']['current_item']
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"Available verbs: {', '.join(exercise_data['verbs'])}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            f"Question {current_q + 1}: {exercise_data['questions'][current_q]}"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📦 Available verbs: {', '.join(exercise_data['verbs'])}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            f"❓ Question {current_q + 1}: {exercise_data['questions'][current_q]}"
         )
     elif exercise_number == 7:
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"Examples:\n• {exercise_data['examples'][0]}\n• {exercise_data['examples'][1]}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            "What do you think Susan did? Start with 'Maybe Susan...'"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📖 Examples:\n• {exercise_data['examples'][0]}\n• {exercise_data['examples'][1]}\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            "🤔 What do you think Susan did? Start with 'Maybe Susan...'"
         )
     elif exercise_number == 8:
         current_q = context.user_data['exercise8']['current_item']
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"Read this text:\n\n{exercise_data['text']}\n\n"
-            f"Question {current_q + 1}: {exercise_data['questions'][current_q]}"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📖 Read this text:\n\n{exercise_data['text']}\n\n"
+            f"❓ Question {current_q + 1}: {exercise_data['questions'][current_q]}"
         )
     elif exercise_number == 9:
         people = list(exercise_data['people'].keys())
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"Example for Susan's sister:\n"
-            "Present: She likes reading.\n"
-            "Past: She loved her present.\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            f"Start with: {people[0]}\n"
-            "Write one present tense and one past tense sentence."
+            f"📚 {exercise_data['title']}\n\n"
+            f"📖 Example for Susan's sister:\n"
+            "• Present: She likes reading.\n"
+            "• Past: She loved her present.\n\n"
+            f"📝 {exercise_data['instruction']}\n\n"
+            f"👤 Start with: {people[0]}\n"
+            "✍️ Write one present tense and one past tense sentence."
         )
     elif exercise_number == 10:
         content = (
-            f"{exercise_data['title']}\n\n"
-            f"Use these verbs: {', '.join(exercise_data['verbs'])}\n\n"
-            f"Examples:\n"
+            f"📚 {exercise_data['title']}\n\n"
+            f"📦 Use these verbs: {', '.join(exercise_data['verbs'])}\n\n"
+            f"📖 Examples:\n"
             f"• {exercise_data['examples'][0]}\n"
             f"• {exercise_data['examples'][1]}\n"
             f"• {exercise_data['examples'][2]}\n\n"
-            f"{exercise_data['instruction']}\n\n"
-            "Write your first sentence:"
+            f"📝 {exercise_data['instruction']}\n\n"
+            "✍️ Write your first sentence:"
         )
     
     # Always show navigation keyboard
@@ -590,8 +613,8 @@ async def navigate_exercises(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data['current_exercise'] = exercise_number
         if exercise_number > 10:
             await query.edit_message_text(
-                "Congratulations! You've completed all exercises!\n\n"
-                "Use /start to begin again."
+                "🎉 Congratulations! You've completed all exercises! 🎉\n\n"
+                "🔄 Use /start to begin again."
             )
             return ConversationHandler.END
         return await start_exercise(update, context, exercise_number)
@@ -668,18 +691,19 @@ def main():
     # Add a separate voice handler for cases outside conversation
     application.add_handler(MessageHandler(filters.VOICE, handle_voice_message))
     
-    logger.info("Past Simple Worksheet Bot started with voice support!")
+    logger.info("🚀 Past Simple Worksheet Bot started successfully!")
+    logger.info(f"🎯 Bot will run on port {PORT}")
     
     # For Railway deployment, use webhook mode
     if os.getenv('RAILWAY_ENVIRONMENT'):
-        # Railway deployment
+        logger.info("🚂 Running in Railway environment with webhook")
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'your-app.railway.app')}"
         )
     else:
-        # Local development
+        logger.info("🏠 Running in local environment with polling")
         application.run_polling()
 
 if __name__ == "__main__":
