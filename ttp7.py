@@ -169,7 +169,6 @@ PAST_SIMPLE_WORKSHEET = {
             "Person E": "5.We listened to music and we danced.",
         },
         "current_pair": 0,
-        "audio_link": "https://youtu.be/9EWCyn1Pw5w",
         "answers": {
             "A": ["4"],
             "B": ["5"],
