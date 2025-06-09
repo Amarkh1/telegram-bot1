@@ -694,8 +694,7 @@ def main():
     logger.info("🚀 Past Simple Worksheet Bot started successfully!")
     logger.info(f"🎯 Bot will run on port {PORT}")
     
-    # For Railway deployment, use polling instead of webhook for simplicity
-    logger.info("🔄 Running with polling mode")
+    # IMPORTANT FIX: Use run_polling() instead of run_webhook()
     application.run_polling()
 
 if __name__ == "__main__":
