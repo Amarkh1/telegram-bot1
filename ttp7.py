@@ -678,7 +678,7 @@ conv_handler = ConversationHandler(
         ],
     },
     fallbacks=[CommandHandler('cancel', lambda update, context: ConversationHandler.END)],
-    per_message=False
+    per_message=True  # Changed to True to fix the PTBUserWarning
 )
 
 def main():
@@ -694,17 +694,9 @@ def main():
     logger.info("🚀 Past Simple Worksheet Bot started successfully!")
     logger.info(f"🎯 Bot will run on port {PORT}")
     
-    # For Railway deployment, use webhook mode
-    if os.getenv('RAILWAY_ENVIRONMENT'):
-        logger.info("🚂 Running in Railway environment with webhook")
-        application.run_webhook(
-            listen="0.0.0.0",
-            port=PORT,
-            webhook_url=f"https://{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'your-app.railway.app')}"
-        )
-    else:
-        logger.info("🏠 Running in local environment with polling")
-        application.run_polling()
+    # For Railway deployment, use polling instead of webhook for simplicity
+    logger.info("🔄 Running with polling mode")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
