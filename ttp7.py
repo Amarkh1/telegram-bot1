@@ -723,7 +723,7 @@ def main():
     logger.info(f"Port: {PORT}")
     
     # Start the bot with webhook
-  application.run_webhook(
+    application.run_webhook(
     listen="0.0.0.0",
     port=PORT,
     webhook_url=WEBHOOK_URL,
