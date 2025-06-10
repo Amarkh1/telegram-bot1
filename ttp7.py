@@ -81,11 +81,6 @@ def is_response_correct(user_response: str, expected_answers: list) -> bool:
     for expected_answer in expected_answers:
         expected_answer = normalize_text(expected_answer)
         
-        # Special handling for questions that require a flexible answer
-        if "i am from" in expected_answer or "my name is" in expected_answer:
-            if expected_answer in user_response:
-                return True
-        
         similarity_ratio = fuzz.ratio(user_response, expected_answer)
         if similarity_ratio >= 75:
             return True
@@ -101,40 +96,11 @@ def is_response_correct(user_response: str, expected_answers: list) -> bool:
     
     return False
 
-# Function to convert voice message to text
-async def voice_to_text(voice_file):
-    wav_file = os.path.join(os.getcwd(), "user_voice.wav")
-    
-    if not convert_ogg_to_wav(voice_file, wav_file):
-        return None
-        
-    if not os.path.exists(wav_file):
-        logger.error(f"Error: .wav file not found at {wav_file}")
-        return None
-    
-    recognizer = sr.Recognizer()
-    try:
-        with sr.AudioFile(wav_file) as source:
-            audio = recognizer.record(source)
-            text = recognizer.recognize_google(audio)
-            return text.lower()
-    except sr.UnknownValueError:
-        logger.info("Speech recognition could not understand the audio.")
-        return None
-    except sr.RequestError:
-        logger.error("Speech recognition service failed.")
-        return None
-    finally:
-        if os.path.exists(wav_file):
-            os.remove(wav_file)
-
 # Get token from environment variable
 TOKEN = os.getenv('TELEGRAM_TOKEN')
 
 if not TOKEN:
     logger.error("TELEGRAM_TOKEN environment variable not set!")
-    logger.error("Please set your Telegram bot token in Railway's environment variables")
-    logger.error("Go to your Railway project > Variables > Add TELEGRAM_TOKEN")
     exit(1)
 else:
     logger.info("TELEGRAM_TOKEN found successfully")
@@ -162,8 +128,7 @@ PAST_SIMPLE_WORKSHEET = {
             ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"],
             ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
             ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
-        ],
-        "current_question": 0
+        ]
     },
     "exercise2": {
         "title": "Exercise 2: Matching Activity",
@@ -175,8 +140,6 @@ PAST_SIMPLE_WORKSHEET = {
             "Person D": "4.The baby cried so I called the doctor.",
             "Person E": "5.We listened to music and we danced.",
         },
-        "current_pair": 0,
-        "audio_link": "https://youtu.be/9EWCyn1Pw5w",
         "answers": {
             "A": ["4"],
             "B": ["5"],
@@ -184,132 +147,6 @@ PAST_SIMPLE_WORKSHEET = {
             "D": ["1"],
             "E": ["2"]
         }
-    },
-    "exercise3": {
-        "title": "Exercise 3: Verb Identification",
-        "instruction": "Find all the verbs in Exercise 2 and say what's similar.",
-        "answers": ["All verbs are in the past simple form."],
-        "verbs": ["cooked", "cleaned", "walked", "played", "listened", 
-                 "danced", "cried", "called", "travelled", "visited"],
-        "current_verb": 0,
-    },
-    "exercise4": {
-        "title": "Exercise 4: Pronunciation Practice",
-        "instruction": "Listen to the recording and repeat the sentences.",
-        "audio_link": "https://youtu.be/KXadJTf1UFo",
-        "sentences": [
-            "We cooked dinner and we cleaned the house.",
-            "I walked in the park and I played basketball.",
-            "We listened to music and we danced.",
-            "The baby cried so I called the doctor.",
-            "I travelled by train and I visited a friend."
-        ],
-        "current_sentence": 0
-    },
-    "exercise5": {
-        "title": "Exercise 5: Past Simple Rules",
-        "instruction": "Complete the rules with verbs from Exercise 2.",
-        "rules": {
-            "A": "Add '-ed' to the verb (work → worked): ______",
-            "B": "If verb ends with 'e', add '-d' (live → lived): ______",
-            "C": "Consonant + 'y' → '-ied' (study → studied): ______",
-            "D": "Vowel + 'y' → '-ed' (enjoy → enjoyed): ______",
-            "E": "Double consonant + '-ed' (stop → stopped): ______"
-        },
-        "current_rule": 0,
-        "answers": {
-            "A": ["cooked", "cleaned", "walked", "played", "listened"],
-            "B": ["danced", "liked"],
-            "C": ["cried", "tried"],
-            "D": ["played", "enjoyed"],
-            "E": ["stopped", "planned"]
-        }
-    },
-    "exercise6": {
-        "title": "Exercise 6: Verb Conjugation",
-        "instruction": "Complete with past form of verbs in the box.",
-        "verbs": ["love", "play", "stop", "study", "talk", "visit", "watch"],
-        "questions": [
-            "I ______ TV with my brother last week.",
-            "My friends and I ______ for the exam last month.",
-            "On Tuesday, they ______ to their boss about the holiday.",
-            "She ______ the guitar yesterday.",
-            "The man ______ the car at the red light.",
-            "They ______ her new book because it was very funny.",
-            "We ______ three museums when we were in London."
-        ],
-        "answers": [
-            ["watched"],
-            ["studied"],
-            ["talked"],
-            ["played"],
-            ["stopped"],
-            ["loved"],
-            ["visited"]
-        ],
-        "current_question": 0
-    },
-    "exercise7": {
-        "title": "Exercise 7: Picture Prediction",
-        "instruction": "Look at Susan's pictures and guess her activities.",
-        "examples": ["Maybe Susan baked a cake.", "Maybe Susan played tennis."],
-        "current_prediction": 0
-    },
-    "exercise8": {
-        "title": "Exercise 8: Reading Comprehension",
-        "text": """Yesterday was Saturday and my family and I had a really fun day. It was my sister's birthday so my partner, Martin, my son, Luca and I visited her in the morning. She was very happy and she loved her present - a new book by her favourite author. My sister likes reading very much!
-
-In the afternoon, Luca and I played tennis together. He usually plays football but he likes tennis, too. Then, Martin and I cooked dinner. I was happy because we don't often cook together. We also called my dad, who lives in Canada. He really likes living there. In the evening, my family and I watched a film together. We rarely watch films together so it was great!""",
-        "questions": [
-            "Whose birthday was it?",
-            "What present did Susan's sister get?",
-            "What sports does Luca usually play?",
-            "Why was Susan happy about cooking dinner?",
-            "Where does Susan's dad live?"
-        ],
-        "answers": [
-            ["Susan's sister", "her sister"],
-            ["a new book", "book"],
-            ["football", "soccer"],
-            ["they don't often cook together", "rarely cook together"],
-            ["Canada"]
-        ],
-        "current_question": 0
-    },
-    "exercise9": {
-        "title": "Exercise 9: Present vs Past",
-        "instruction": "Say two things about each person: one present, one past.",
-        "people": {
-            "Luca": {
-                "present": ["usually plays football", "likes tennis"],
-                "past": ["played tennis with Susan", "visited aunt"]
-            },
-            "Martin": {
-                "present": ["partner", "lives with Susan"],
-                "past": ["cooked dinner", "visited sister"]
-            },
-            "Susan's dad": {
-                "present": ["lives in Canada", "likes living there"],
-                "past": ["was called"]
-            },
-            "Susan": {
-                "present": ["has a family", "has a son"],
-                "past": ["watched a film", "played tennis", "cooked dinner"]
-            }
-        },
-        "current_person": 0
-    },
-    "exercise10": {
-        "title": "Exercise 10: Personal Practice",
-        "instruction": "Talk about what you/people did yesterday/last week/month.",
-        "verbs": ["call", "email", "travel", "clean", "listen", "visit", "cook", 
-                "play", "walk", "cry", "study", "watch", "dance", "talk", "work"],
-        "examples": [
-            "Yesterday, I cried when I watched a YouTube video with three dogs.",
-            "Last week, my friends and I listened to music and walked in the park.",
-            "Last month, my colleagues travelled to London and talked to clients."
-        ],
-        "current_example": 0
     }
 }
 
@@ -322,22 +159,6 @@ def get_navigation_keyboard(current_exercise):
         buttons.append(InlineKeyboardButton("Next →", callback_data=f"nav_{current_exercise+1}"))
     buttons.append(InlineKeyboardButton("Restart", callback_data="nav_1"))
     return InlineKeyboardMarkup([buttons])
-
-# Debug command handler
-async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    logger.info(f"Debug command received from {update.effective_user.id}")
-    await update.message.reply_text(f"Debug: Bot is running! Telegram version: {TG_VER}")
-
-# Error handler
-async def error_handler(update, context):
-    logger.error(f"Exception while handling an update: {context.error}")
-    logger.error(traceback.format_exc())
-    
-    # Notify user if possible
-    if update and update.effective_message:
-        await update.effective_message.reply_text(
-            "Sorry, something went wrong. The error has been logged."
-        )
 
 # Start the worksheet
 async def start_worksheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -352,267 +173,155 @@ async def start_worksheet(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(welcome_msg)
     return await start_exercise(update, context, 1)
 
-# Enhanced voice message handler
-async def handle_voice_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    voice = update.message.voice
-    file_id = voice.file_id
-    logger.info(f"Voice message received! File ID: {file_id}")
-    
-    try:
-        # Download the voice file
-        file = await voice.get_file()
-        file_path = os.path.join(os.getcwd(), "user_voice.ogg")
-        await file.download_to_drive(file_path)
-        
-        # Convert voice to text
-        text = await voice_to_text(file_path)
-        
-        if text:
-            await update.message.reply_text(f"🎙️ Recognized: {text}")
-            # Now handle the recognized text as a regular message
-            update.message.text = text
-            return await handle_exercise(update, context)
-        else:
-            await update.message.reply_text("❌ Sorry, I could not understand the audio. Please try again or type your answer.")
-    
-    except Exception as e:
-        logger.error(f"Voice processing error: {e}")
-        await update.message.reply_text("❌ Sorry, there was an error processing your voice message. Please type your answer.")
-    
-    finally:
-        # Clean up files
-        for file_path in ["user_voice.ogg", "user_voice.wav"]:
-            if os.path.exists(file_path):
-                try:
-                    os.remove(file_path)
-                except:
-                    pass
-    
-    # Return current state to stay in the same exercise
-    return context.user_data.get('current_exercise', EXERCISE1)
-
 # Enhanced exercise handler with voice support
 async def handle_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE):
     exercise_number = context.user_data.get('current_exercise', 1)
-    exercise_data = PAST_SIMPLE_WORKSHEET[f'exercise{exercise_number}']
     
-    # Handle voice messages first
+    logger.info(f"Handling exercise {exercise_number} for user {update.effective_user.id}")
+    
+    # Handle voice messages
     if update.message.voice:
-        return await handle_voice_message(update, context)
-    
-    # Handle text messages
-    if update.message.text:
-        user_input = update.message.text.strip().lower()
-        
-        # Check if user wants to skip (for pronunciation exercises)
-        if user_input == 'skip' and exercise_number in [4]:
-            context.user_data[f'exercise{exercise_number}']['current_item'] += 1
-            await update.message.reply_text("⏭️ Skipped to next item.")
-            return await start_exercise(update, context, exercise_number)
-        
-        # Process answer based on exercise type
-        if exercise_number in [1, 6, 8]:
-            # Get correct answers for current question
-            current_item = context.user_data[f'exercise{exercise_number}']['current_item']
-            expected_answers = exercise_data['answers'][current_item]
+        try:
+            logger.info("Processing voice message")
+            voice_file = await update.message.voice.get_file()
+            voice_path = f"voice_{update.message.from_user.id}.ogg"
+            wav_path = f"voice_{update.message.from_user.id}.wav"
+
+            await voice_file.download_to_drive(voice_path)
             
-            # Check if answer is correct
-            if is_response_correct(user_input, expected_answers):
-                context.user_data[f'exercise{exercise_number}']['score'] += 1
-                feedback = random.choice([
-                    "✅ Great job! Your answer is correct! 🎉",
-                    "✅ Excellent! You got it right! 👏",
-                    "✅ Perfect! That's the correct answer! 🌟",
-                    "✅ Well done! You're learning fast! 💪",
-                    "✅ Fantastic! Keep up the good work! 🏆"
-                ])
-                
-                # Move to next question
-                context.user_data[f'exercise{exercise_number}']['current_item'] += 1
-                total_items = len(exercise_data['questions'])
-                
-                if context.user_data[f'exercise{exercise_number}']['current_item'] < total_items:
-                    next_q = context.user_data[f'exercise{exercise_number}']['current_item']
-                    feedback += f"\n\nQuestion {next_q + 1}: {exercise_data['questions'][next_q]}"
-                    await update.message.reply_text(feedback)
-                    return exercise_number
-                else:
-                    feedback += f"\n\n🎉 Exercise completed! Score: {context.user_data[f'exercise{exercise_number}']['score']}/{total_items}"
-                    keyboard = get_navigation_keyboard(exercise_number)
-                    await update.message.reply_text(feedback, reply_markup=keyboard)
-                    return exercise_number
-            else:
-                feedback = random.choice([
-                    "❌ Almost there! Try again.",
-                    "❌ Not quite right. Let's try once more.",
-                    f"❌ Good effort! A correct answer would be: {expected_answers[0]}",
-                    "❌ You're close! Think about it again."
-                ])
-                await update.message.reply_text(feedback)
+            if not convert_ogg_to_wav(voice_path, wav_path):
+                await update.message.reply_text("❌ Error converting audio file.")
                 return exercise_number
-        
-        # Handle other exercises with simpler logic
-        elif exercise_number == 4:  # Pronunciation practice
-            current_sentence = context.user_data['exercise4']['current_sentence']
-            target_sentence = exercise_data['sentences'][current_sentence].lower()
-            similarity = fuzz.ratio(user_input, target_sentence)
-            
-            if similarity >= 80:
-                feedback = "✅ Excellent! Your pronunciation is very accurate! 🎉"
-            elif similarity >= 60:
-                feedback = "✅ Good job! Your pronunciation is mostly correct! 👍"
-            else:
-                feedback = "❌ Try again. Listen to the example and repeat."
-            
-            feedback += f"\n\nSimilarity score: {similarity}%"
-            await update.message.reply_text(feedback)
-            
-            # Move to next sentence if similarity is good enough
-            if similarity >= 60:
-                context.user_data['exercise4']['current_sentence'] += 1
-                if context.user_data['exercise4']['current_sentence'] < len(exercise_data['sentences']):
-                    await update.message.reply_text("Moving to next sentence...")
-                    return await start_exercise(update, context, exercise_number)
-                else:
-                    await update.message.reply_text("🎉 You completed all pronunciation exercises!")
-                    keyboard = get_navigation_keyboard(exercise_number)
-                    await update.message.reply_text("Choose what to do next:", reply_markup=keyboard)
-                    return exercise_number
+
+            recognizer = sr.Recognizer()
+            with sr.AudioFile(wav_path) as source:
+                audio = recognizer.record(source)
+                user_speech = recognizer.recognize_google(audio).lower()
+                await update.message.reply_text(f"🎙️ I heard: '{user_speech}'")
+                
+                # Process as text
+                update.message.text = user_speech
+                return await handle_exercise(update, context)
+
+        except sr.UnknownValueError:
+            await update.message.reply_text("❌ Sorry, I couldn't understand the audio.")
             return exercise_number
+        except Exception as e:
+            logger.error(f"Voice processing error: {e}")
+            await update.message.reply_text("❌ Error processing voice message.")
+            return exercise_number
+        finally:
+            for path in [voice_path, wav_path]:
+                try:
+                    if 'path' in locals() and os.path.exists(path):
+                        os.remove(path)
+                except:
+                    pass
+
+    # Handle text messages
+    elif update.message.text:
+        user_input = update.message.text.strip().lower()
+        logger.info(f"Processing text: {user_input}")
+        
+        if exercise_number == 1:
+            # Initialize if needed
+            if 'exercise1' not in context.user_data:
+                context.user_data['exercise1'] = {"current_item": 0, "score": 0}
+            
+            current_item = context.user_data['exercise1']['current_item']
+            expected_answers = PAST_SIMPLE_WORKSHEET['exercise1']['answers'][current_item]
+            
+            if is_response_correct(user_input, expected_answers):
+                context.user_data['exercise1']['score'] += 1
+                context.user_data['exercise1']['current_item'] += 1
+                
+                if context.user_data['exercise1']['current_item'] < 4:
+                    next_q = context.user_data['exercise1']['current_item']
+                    await update.message.reply_text(
+                        f"✅ Correct! Next question: {PAST_SIMPLE_WORKSHEET['exercise1']['questions'][next_q]}"
+                    )
+                    return EXERCISE1
+                else:
+                    score = context.user_data['exercise1']['score']
+                    await update.message.reply_text(
+                        f"🎉 Exercise 1 completed! Score: {score}/4",
+                        reply_markup=get_navigation_keyboard(1)
+                    )
+                    return EXERCISE1
+            else:
+                await update.message.reply_text(f"❌ Try again! Hint: {expected_answers[0]}")
+                return EXERCISE1
+                
+        elif exercise_number == 2:
+            # Handle Exercise 2 matching
+            if not re.match(r'^([A-E]-[1-5],?\s*)+$', user_input.upper()):
+                await update.message.reply_text("Please use format: 'A-4, B-5, C-3, D-1, E-2'")
+                return EXERCISE2
+            
+            user_pairs = {}
+            for pair in user_input.upper().split(','):
+                pair = pair.strip()
+                if '-' in pair:
+                    k, v = pair.split('-', 1)
+                    user_pairs[k.strip()] = v.strip()
+            
+            correct = 0
+            for k, correct_list in PAST_SIMPLE_WORKSHEET['exercise2']['answers'].items():
+                if user_pairs.get(k) in correct_list:
+                    correct += 1
+            
+            await update.message.reply_text(
+                f"You got {correct}/5 pairs correct!",
+                reply_markup=get_navigation_keyboard(2)
+            )
+            return EXERCISE2
         
         else:
-            # Simple acknowledgment for other exercises
-            await update.message.reply_text("Great! Your answer has been recorded. 👍")
-            keyboard = get_navigation_keyboard(exercise_number)
-            await update.message.reply_text("What would you like to do next?", reply_markup=keyboard)
+            # For other exercises, just acknowledge and show navigation
+            await update.message.reply_text(
+                "✅ Thank you for your answer!",
+                reply_markup=get_navigation_keyboard(exercise_number)
+            )
             return exercise_number
-    
-    await update.message.reply_text("Please send a text or voice message to continue.")
-    return exercise_number
+
+    else:
+        await update.message.reply_text("Please send a text message or voice message.")
+        return exercise_number
 
 # Start a specific exercise
 async def start_exercise(update: Update, context: ContextTypes.DEFAULT_TYPE, exercise_number: int):
-    exercise_name = f"exercise{exercise_number}"
-    exercise_data = PAST_SIMPLE_WORKSHEET[exercise_name]
+    logger.info(f"Starting exercise {exercise_number}")
     
-    # Initialize exercise data
-    if exercise_name not in context.user_data:
-        context.user_data[exercise_name] = {"current_item": 0, "score": 0}
-    
-    # Exercise-specific content
     if exercise_number == 1:
+        if 'exercise1' not in context.user_data:
+            context.user_data['exercise1'] = {"current_item": 0, "score": 0}
+        
         current_q = context.user_data['exercise1']['current_item']
         content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📖 Examples:\n• {exercise_data['examples'][0]}\n• {exercise_data['examples'][1]}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            f"❓ Question {current_q + 1}: {exercise_data['questions'][current_q]}"
+            f"📚 Exercise 1: Days and Months\n\n"
+            f"📖 Examples:\n• Today is Sunday. Yesterday was Saturday.\n• This month is August. Last month was July.\n\n"
+            f"📝 Complete the gaps with days of the week and months.\n\n"
+            f"❓ Question {current_q + 1}: {PAST_SIMPLE_WORKSHEET['exercise1']['questions'][current_q]}"
         )
     elif exercise_number == 2:
-        pairs = "\n".join([f"{person}: {sentence}" for person, sentence in exercise_data['pairs'].items()])
+        pairs = "\n".join([f"{person}: {sentence}" for person, sentence in PAST_SIMPLE_WORKSHEET['exercise2']['pairs'].items()])
         content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
+            f"📚 Exercise 2: Matching Activity\n\n"
+            f"📝 Match the people (A-E) with the sentences (1-5).\n\n"
             f"👥 People and their activities:\n{pairs}\n\n"
             "💬 Type your matches like: 'A-4, B-5, C-3, D-1, E-2'"
         )
-    elif exercise_number == 3:
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            "🔍 Look back at Exercise 2 and find all the verbs (action words).\n"
-            "💭 What do you notice about all these verbs?"
-        )
-    elif exercise_number == 4:
-        current_sentence = context.user_data['exercise4']['current_sentence']
-        sentence = exercise_data['sentences'][current_sentence]
-        
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            f"🎯 Sentence {current_sentence + 1}: {sentence}\n\n"
-            "🎤 Send a voice message to practice pronunciation!\n"
-            "💬 Or type the sentence if you prefer\n"
-            "⏭️ Type 'skip' to move to the next sentence"
-        )
-        
-        # Generate TTS if available (without failing if it doesn't work)
-        if engine:
-            try:
-                audio_file = f"tts_sentence_{current_sentence}.wav"
-                if text_to_speech(sentence, audio_file):
-                    nav_keyboard = get_navigation_keyboard(exercise_number)
-                    
-                    if hasattr(update, 'callback_query') and update.callback_query:
-                        with open(audio_file, 'rb') as audio:
-                            await update.callback_query.message.reply_audio(audio=audio)
-                        await update.callback_query.message.reply_text(content, reply_markup=nav_keyboard)
-                    else:
-                        with open(audio_file, 'rb') as audio:
-                            await update.message.reply_audio(audio=audio)
-                        await update.message.reply_text(content, reply_markup=nav_keyboard)
-                    
-                    # Clean up
-                    try:
-                        os.remove(audio_file)
-                    except:
-                        pass
-                    return globals()[f"EXERCISE{exercise_number}"]
-            except Exception as e:
-                logger.warning(f"TTS failed, continuing without audio: {e}")
+    else:
+        content = f"📚 Exercise {exercise_number}\n\nThis exercise is under construction. Please use navigation buttons."
     
-    elif exercise_number == 5:
-        rules_text = "\n".join([f"{letter}. {rule}" for letter, rule in exercise_data['rules'].items()])
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            f"📋 Rules:\n{rules_text}\n\n"
-            "💡 Give examples for each rule using verbs from Exercise 2."
-        )
-    elif exercise_number == 6:
-        current_q = context.user_data['exercise6']['current_item']
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📦 Available verbs: {', '.join(exercise_data['verbs'])}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            f"❓ Question {current_q + 1}: {exercise_data['questions'][current_q]}"
-        )
-    elif exercise_number == 7:
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📖 Examples:\n• {exercise_data['examples'][0]}\n• {exercise_data['examples'][1]}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            "🤔 What do you think Susan did? Start with 'Maybe Susan...'"
-        )
-    elif exercise_number == 8:
-        current_q = context.user_data['exercise8']['current_item']
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📖 Read this text:\n\n{exercise_data['text']}\n\n"
-            f"❓ Question {current_q + 1}: {exercise_data['questions'][current_q]}"
-        )
-    elif exercise_number == 9:
-        people = list(exercise_data['people'].keys())
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📖 Example for Susan's sister:\n"
-            "• Present: She likes reading.\n"
-            "• Past: She loved her present.\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            f"👤 Start with: {people[0]}\n"
-            "✍️ Write one present tense and one past tense sentence."
-        )
-    elif exercise_number == 10:
-        content = (
-            f"📚 {exercise_data['title']}\n\n"
-            f"📦 Use these verbs: {', '.join(exercise_data['verbs'])}\n\n"
-            f"📖 Examples:\n"
-            f"• {exercise_data['examples'][0]}\n"
-            f"• {exercise_data['examples'][1]}\n"
-            f"• {exercise_data['examples'][2]}\n\n"
-            f"📝 {exercise_data['instruction']}\n\n"
-            "✍️ Write your first sentence:"
-        )
+    nav_keyboard = get_navigation_keyboard(exercise_number)
+    
+    if hasattr(update, 'callback_query') and update.callback_query:
+        await update.callback_query.edit_message_text(content, reply_markup=nav_keyboard)
+    else:
+        await update.message.reply_text(content, reply_markup=nav_keyboard)
+    
+    return globals()[f"EXERCISE{exercise_number}"]
 
 # Navigation handler
 async def navigate_exercises(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -621,115 +330,110 @@ async def navigate_exercises(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await query.answer()
         exercise_number = int(query.data.split('_')[1])
         context.user_data['current_exercise'] = exercise_number
+        
         if exercise_number > 10:
-            await query.edit_message_text(
-                "🎉 Congratulations! You've completed all exercises! 🎉\n\n"
-                "🔄 Use /start to begin again."
-            )
+            await query.edit_message_text("🎉 Congratulations! You've completed all exercises!")
             return ConversationHandler.END
+            
         return await start_exercise(update, context, exercise_number)
     else:
         exercise_number = context.user_data.get('current_exercise', 1)
         return await start_exercise(update, context, exercise_number)
 
-# Update the conversation handler
+# Error handler
+async def error_handler(update, context):
+    logger.error(f"Exception while handling an update: {context.error}")
+    logger.error(traceback.format_exc())
+
+# Debug command handler
+async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(f"Debug: Bot is running! Version: {TG_VER}")
+
+# Conversation handler
 conv_handler = ConversationHandler(
     entry_points=[CommandHandler("start", start_worksheet)],
     states={
         EXERCISE1: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE2: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE3: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE4: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE5: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE6: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE7: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE8: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE9: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
         EXERCISE10: [
             MessageHandler(filters.TEXT & ~filters.COMMAND, handle_exercise),
-            MessageHandler(filters.VOICE & ~filters.COMMAND, handle_exercise),
+            MessageHandler(filters.VOICE, handle_exercise),
             CallbackQueryHandler(navigate_exercises, pattern="^nav_")
         ],
     },
     fallbacks=[
         CommandHandler("cancel", lambda update, context: ConversationHandler.END),
-        CommandHandler("start", start_worksheet)  # Allow restarting even in conversation
+        CommandHandler("start", start_worksheet)
     ],
-    per_message=False,
-    name="exercise_conversation"  # Add a name for better logging
+    per_message=False
 )
 
 def main():
-    # Get port from environment or default to 8000
     PORT = int(os.environ.get('PORT', 8000))
-    
-    # Get Railway-provided public URL
     RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN')
     if not RAILWAY_PUBLIC_DOMAIN:
-        logger.warning("RAILWAY_PUBLIC_DOMAIN not found, using default domain")
         RAILWAY_PUBLIC_DOMAIN = "telegram-bot1-production.up.railway.app"
     
-    # Build webhook URL
     WEBHOOK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}"
     
-    # Initialize application with token
     application = Application.builder().token(TOKEN).build()
-    
-    # Add handlers
     application.add_handler(conv_handler)
-    application.add_handler(MessageHandler(filters.VOICE, handle_voice_message), group=1)
     application.add_handler(CommandHandler("debug", debug_command), group=-1)
     application.add_error_handler(error_handler)
     
-    # Log important info
     logger.info("Starting bot in webhook mode")
     logger.info(f"Webhook URL: {WEBHOOK_URL}")
     logger.info(f"Port: {PORT}")
     
-    # Start the bot with webhook
     application.run_webhook(
-    listen="0.0.0.0",
-    port=PORT,
-    webhook_url=WEBHOOK_URL,
-    drop_pending_updates=True,  # Optional but recommended
-    secret_token=None,  # Add a secret token for security
-)
+        listen="0.0.0.0",
+        port=PORT,
+        webhook_url=WEBHOOK_URL,
+        drop_pending_updates=True
+    )
 
 if __name__ == "__main__":
     main()
