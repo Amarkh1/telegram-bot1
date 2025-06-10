@@ -5,4 +5,4 @@ if [ ! -f /usr/bin/espeak ]; then
 fi
 
 # Start the bot
-python ttp7.py
+python test_webhook.py
