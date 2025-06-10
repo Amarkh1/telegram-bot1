@@ -691,7 +691,7 @@ conv_handler = ConversationHandler(
         CommandHandler("cancel", lambda update, context: ConversationHandler.END),
         CommandHandler("start", start_worksheet)  # Allow restarting even in conversation
     ],
-    per_message=True,
+    per_message=False,
     name="exercise_conversation"  # Add a name for better logging
 )
 
