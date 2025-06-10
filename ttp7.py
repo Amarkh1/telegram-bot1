@@ -17,16 +17,37 @@ async def healthcheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     await update.message.reply_text("Bot is running!")
 
 def main():
-    # Get token
-    token = os.getenv("TELEGRAM_TOKEN")
-    port = int(os.environ.get('PORT', 8000))
+    PORT = int(os.environ.get('PORT', 8000))
+    RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN')
+    if not RAILWAY_PUBLIC_DOMAIN:
+        logger.warning("RAILWAY_PUBLIC_DOMAIN not found, using default domain")
+        RAILWAY_PUBLIC_DOMAIN = "telegram-bot1-production.up.railway.app"
     
-    # Get webhook domain
-    domain = os.getenv('RAILWAY_PUBLIC_DOMAIN', 'telegram-bot1-production.up.railway.app')
-    webhook_url = f"https://{domain}"
+    # Don't add any port to the webhook URL!
+    WEBHOOK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}"
     
-    # Create application
-    application = Application.builder().token(token).build()
+    logger.info(f"Starting bot with webhook URL: {WEBHOOK_URL}")
+    
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(conv_handler)
+    application.add_handler(CommandHandler("debug", debug_command), group=-1)
+    application.add_error_handler(error_handler)
+    
+    try:
+        # Try with webhook
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            webhook_url=WEBHOOK_URL,
+            drop_pending_updates=True
+        )
+        logger.info("Webhook started successfully")
+    except Exception as e:
+        logger.error(f"Error starting webhook: {str(e)}")
+        logger.error(traceback.format_exc())
+        logger.info("Falling back to polling mode...")
+        application.run_polling(drop_pending_updates=True)
+    
     
     # Add simple handlers
     application.add_handler(CommandHandler("start", start))
