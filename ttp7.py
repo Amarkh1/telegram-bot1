@@ -703,7 +703,7 @@ def main():
     RAILWAY_PUBLIC_DOMAIN = os.getenv('RAILWAY_PUBLIC_DOMAIN')
     if not RAILWAY_PUBLIC_DOMAIN:
         logger.warning("RAILWAY_PUBLIC_DOMAIN not found, using default domain")
-        RAILWAY_PUBLIC_DOMAIN = "your-app.up.railway.app"
+        RAILWAY_PUBLIC_DOMAIN = "telegram-bot1-production.up.railway.app"
     
     # Build webhook URL
     WEBHOOK_URL = f"https://{RAILWAY_PUBLIC_DOMAIN}"
@@ -723,12 +723,13 @@ def main():
     logger.info(f"Port: {PORT}")
     
     # Start the bot with webhook
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        webhook_url=WEBHOOK_URL,
-        secret_token=None  # You can generate a random token for added security
-    )
+  application.run_webhook(
+    listen="0.0.0.0",
+    port=PORT,
+    webhook_url=WEBHOOK_URL,
+    drop_pending_updates=True,  # Optional but recommended
+    secret_token=None,  # Add a secret token for security
+)
 
 if __name__ == "__main__":
     main()
