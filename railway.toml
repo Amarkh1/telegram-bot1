@@ -1,0 +1,5 @@
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "pip install python-telegram-bot[webhooks]==20.6 && python ttp7.py"
