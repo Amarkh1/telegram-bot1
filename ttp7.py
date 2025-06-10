@@ -2,10 +2,17 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 import os
 import logging
+import traceback
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Get token
+TOKEN = os.getenv("TELEGRAM_TOKEN")
+if not TOKEN:
+    logger.error("No TELEGRAM_TOKEN found in environment variables")
+    exit(1)
 
 # Command handlers
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -15,6 +22,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def healthcheck(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.info("Healthcheck received")
     await update.message.reply_text("Bot is running!")
+
+async def error_handler(update, context):
+    logger.error(f"Exception while handling an update: {context.error}")
+    logger.error(traceback.format_exc())
 
 def main():
     PORT = int(os.environ.get('PORT', 8000))
@@ -29,36 +40,28 @@ def main():
     logger.info(f"Starting bot with webhook URL: {WEBHOOK_URL}")
     
     application = Application.builder().token(TOKEN).build()
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("debug", debug_command), group=-1)
+    
+    # Add handlers BEFORE starting the webhook
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("healthcheck", healthcheck))
     application.add_error_handler(error_handler)
     
     try:
-        # Try with webhook
+        # Try with webhook - only call this ONCE
+        logger.info("Starting webhook...")
         application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             webhook_url=WEBHOOK_URL,
             drop_pending_updates=True
         )
+        # This line will never be reached as run_webhook blocks
         logger.info("Webhook started successfully")
     except Exception as e:
         logger.error(f"Error starting webhook: {str(e)}")
         logger.error(traceback.format_exc())
         logger.info("Falling back to polling mode...")
         application.run_polling(drop_pending_updates=True)
-    
-    
-    # Add simple handlers
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("healthcheck", healthcheck))
-    
-    # Start webhook
-    application.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        webhook_url=webhook_url
-    )
 
 if __name__ == "__main__":
     main()
