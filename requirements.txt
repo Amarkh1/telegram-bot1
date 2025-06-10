@@ -1,4 +1,4 @@
-python-telegram-bot==20.6
+python-telegram-bot[webhooks]==20.6
 SpeechRecognition==3.10.0
 pyttsx3==2.90
 fuzzywuzzy==0.18.0
